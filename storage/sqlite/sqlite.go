@@ -77,6 +77,35 @@ func (s *Storage) IsExists(ctx context.Context, page *storage.Page) (bool, error
 	return count > 0, nil
 }
 
+func (s *Storage) PickLastFive(ctx context.Context, username string) ([]*storage.Page, error) {
+	limit := 5
+
+	q := `SELECT url FROM pages WHERE user_name = :username LIMIT :limit`
+	rows, err := s.db.QueryContext(ctx, q, sql.Named("username", username), sql.Named("limit", limit))
+	if err == sql.ErrNoRows {
+		return nil, err
+	}
+	if err != nil {
+		return nil, fmt.Errorf("[PickLastTen]: can't pick last five pages: %w", err)
+	}
+
+	var pages []*storage.Page
+
+	for rows.Next() {
+		var url string
+
+		if err := rows.Scan(&url); err == sql.ErrNoRows {
+			return nil, err
+		} else if err != nil {
+			return nil, fmt.Errorf("[PickLastTen]: can't pick last ten pages: %w", err)
+		}
+
+		pages = append(pages, &storage.Page{URL: url, UserName: username})
+	}
+
+	return pages, nil
+}
+
 func (s *Storage) Init(ctx context.Context) error {
 	q := `CREATE TABLE IF NOT EXISTS pages (url TEXT, user_name TEXT)`
 

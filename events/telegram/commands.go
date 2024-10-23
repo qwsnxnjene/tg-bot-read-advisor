@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
 	"strings"
@@ -13,9 +14,10 @@ import (
 )
 
 const (
-	RndCmd   = "/rnd"
-	HelpCmd  = "/help"
-	StartCmd = "/start"
+	RndCmd      = "/rnd"
+	HelpCmd     = "/help"
+	StartCmd    = "/start"
+	LastFiveCmd = "/get"
 )
 
 func (p *Processor) doCmd(text string, chatID int, userName string) error {
@@ -34,9 +36,44 @@ func (p *Processor) doCmd(text string, chatID int, userName string) error {
 		return p.sendHelp(chatID)
 	case StartCmd:
 		return p.sendHello(chatID)
+	case LastFiveCmd:
+		return p.sendLastFive(chatID, userName)
 	default:
 		return p.tg.SendMessage(chatID, msgUnknownCommand)
 	}
+}
+
+func (p *Processor) sendLastFive(chatID int, username string) (err error) {
+	defer func() { err = e.WrapIfErr("[sendTen]: can't do command: can't send last 10 pages", err) }()
+
+	pages, err := p.storage.PickLastFive(context.Background(), username)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return p.tg.SendMessage(chatID, msgNoSavedPages)
+	}
+
+	var message string
+	for i, page := range pages {
+		message += fmt.Sprintf("%d. %s\n\n", i+1, page.URL)
+	}
+	if len(message) == 0 {
+		return p.tg.SendMessage(chatID, msgNoSavedPages)
+	}
+
+	message = message[:len(message)-1]
+
+	if err := p.tg.SendMessage(chatID, message); err != nil {
+		return err
+	}
+
+	for _, page := range pages {
+		if err := p.storage.Remove(context.Background(), page); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *Processor) savePage(chatID int, pageURL string, username string) (err error) {
