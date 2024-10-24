@@ -20,6 +20,7 @@ type Client struct {
 const (
 	getUpdatesMethod  = "getUpdates"
 	sendMessageMethod = "sendMessage"
+	markdownParseMode = "markdown"
 )
 
 func New(host string, token string) *Client {
@@ -55,10 +56,13 @@ func (c *Client) Updates(offset int, limit int) (updates []Update, err error) {
 	return res.Result, nil
 }
 
-func (c *Client) SendMessage(chatID int, text string) error {
+func (c *Client) SendMessage(chatID int, text string, markdownEnabled bool) error {
 	q := url.Values{}
 	q.Add("chat_id", strconv.Itoa(chatID))
 	q.Add("text", text)
+	if markdownEnabled {
+		q.Add("parse_mode", markdownParseMode)
+	}
 
 	_, err := c.doRequest(sendMessageMethod, q)
 	if err != nil {

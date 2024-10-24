@@ -20,6 +20,7 @@ type Storage interface {
 type Page struct {
 	URL      string
 	UserName string
+	Title    string
 }
 
 func (p Page) Hash() (string, error) {
