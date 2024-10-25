@@ -27,9 +27,13 @@ func New(path string) (*Storage, error) {
 }
 
 func (s *Storage) Save(ctx context.Context, p *storage.Page) error {
-	q := `INSERT INTO pages (url, user_name, title) VALUES (:url, :username, :title)`
+	q := `INSERT INTO pages (url, user_name, title, date) VALUES (:url, :username, :title, :date)`
 
-	if _, err := s.db.ExecContext(ctx, q, sql.Named("url", p.URL), sql.Named("username", p.UserName), sql.Named("title", p.Title)); err != nil {
+	if _, err := s.db.ExecContext(ctx, q,
+		sql.Named("url", p.URL),
+		sql.Named("username", p.UserName),
+		sql.Named("title", p.Title),
+		sql.Named("date", p.Date)); err != nil {
 		return fmt.Errorf("[Save]: can't save page: %w", err)
 	}
 
@@ -37,11 +41,11 @@ func (s *Storage) Save(ctx context.Context, p *storage.Page) error {
 }
 
 func (s *Storage) PickRandom(ctx context.Context, userName string) (*storage.Page, error) {
-	q := `SELECT url, title FROM pages WHERE user_name = :username ORDER BY RANDOM() LIMIT 1`
+	q := `SELECT url, title, date FROM pages WHERE user_name = :username ORDER BY RANDOM() LIMIT 1`
 
-	var url, title string
+	var url, title, date string
 
-	err := s.db.QueryRowContext(ctx, q, sql.Named("username", userName)).Scan(&url, &title)
+	err := s.db.QueryRowContext(ctx, q, sql.Named("username", userName)).Scan(&url, &title, &date)
 	if err == sql.ErrNoRows {
 		return nil, err
 	}
@@ -53,6 +57,7 @@ func (s *Storage) PickRandom(ctx context.Context, userName string) (*storage.Pag
 		URL:      url,
 		UserName: userName,
 		Title:    title,
+		Date:     date,
 	}, nil
 }
 
@@ -81,7 +86,7 @@ func (s *Storage) IsExists(ctx context.Context, page *storage.Page) (bool, error
 func (s *Storage) PickLastFive(ctx context.Context, username string) ([]*storage.Page, error) {
 	limit := 5
 
-	q := `SELECT url, title FROM pages WHERE user_name = :username LIMIT :limit`
+	q := `SELECT url, title, date FROM pages WHERE user_name = :username ORDER BY date DESC LIMIT :limit`
 	rows, err := s.db.QueryContext(ctx, q, sql.Named("username", username), sql.Named("limit", limit))
 	if err == sql.ErrNoRows {
 		return nil, err
@@ -93,22 +98,39 @@ func (s *Storage) PickLastFive(ctx context.Context, username string) ([]*storage
 	var pages []*storage.Page
 
 	for rows.Next() {
-		var url, title string
+		var url, title, date string
 
-		if err := rows.Scan(&url, &title); err == sql.ErrNoRows {
+		if err := rows.Scan(&url, &title, &date); err == sql.ErrNoRows {
 			return nil, err
 		} else if err != nil {
 			return nil, fmt.Errorf("[PickLastTen]: can't pick last ten pages: %w", err)
 		}
 
-		pages = append(pages, &storage.Page{URL: url, UserName: username, Title: title})
+		pages = append(pages, &storage.Page{URL: url, UserName: username, Title: title, Date: date})
 	}
 
 	return pages, nil
 }
 
 func (s *Storage) Init(ctx context.Context) error {
-	q := `CREATE TABLE IF NOT EXISTS pages (url TEXT, user_name TEXT, title TEXT)`
+	check := `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='pages'`
+	var count int
+
+	if err := s.db.QueryRowContext(ctx, check).Scan(&count); err != nil {
+		return fmt.Errorf("[Init]: can't check if table exists: %w", err)
+	}
+
+	if count != 0 {
+		return nil
+	}
+
+	q := `CREATE TABLE IF NOT EXISTS pages 
+	(url TEXT NOT NULL DEFAULT "",
+	 user_name TEXT NOT NULL DEFAULT "",
+	 title TEXT, 
+	 date CHAR(8) NOT NULL DEFAULT "19700101");
+	 
+	 CREATE INDEX user_date ON pages(user_name, date);`
 
 	if _, err := s.db.ExecContext(ctx, q); err != nil {
 		return fmt.Errorf("[Init]: can't create table: %w", err)

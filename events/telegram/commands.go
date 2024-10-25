@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/qwsnxnjene/telegram-bot/lib/e"
@@ -20,15 +21,17 @@ const (
 	HelpCmd     = "/help"
 	StartCmd    = "/start"
 	LastFiveCmd = "/get"
+
+	YYYYMMDD = "2006-01-02"
 )
 
-func (p *Processor) doCmd(text string, chatID int, userName string) error {
+func (p *Processor) doCmd(text string, chatID int, userName string, date int) error {
 	text = strings.TrimSpace(text)
 
 	log.Printf("[doCmd]: got new command '%s' from '%s'", text, userName)
 
 	if isAddCmd(text) {
-		return p.savePage(chatID, text, userName)
+		return p.savePage(chatID, text, userName, unixToString(date))
 	}
 
 	switch text {
@@ -43,6 +46,12 @@ func (p *Processor) doCmd(text string, chatID int, userName string) error {
 	default:
 		return p.tg.SendMessage(chatID, msgUnknownCommand, false)
 	}
+}
+
+func unixToString(date int) string {
+	t := time.Unix(int64(date), 0)
+
+	return t.UTC().Format(YYYYMMDD)
 }
 
 func (p *Processor) sendLastFive(chatID int, username string) (err error) {
@@ -61,11 +70,12 @@ func (p *Processor) sendLastFive(chatID int, username string) (err error) {
 	enableMarkdown = false
 	for i, page := range pages {
 		if page.Title != "" {
-			message += fmt.Sprintf("%d. [%s](%s)\n\n", i+1, page.Title, page.URL)
+			message += fmt.Sprintf("%d. [%s](%s)\n", i+1, page.Title, page.URL)
 			enableMarkdown = true
 		} else {
-			message += fmt.Sprintf("%d. %s\n\n", i+1, page.URL)
+			message += fmt.Sprintf("%d. %s\n", i+1, page.URL)
 		}
+		message += fmt.Sprintf("Была добавлена: %s\n\n", page.Date)
 	}
 	if len(message) == 0 {
 		return p.tg.SendMessage(chatID, msgNoSavedPages, false)
@@ -84,7 +94,7 @@ func (p *Processor) sendLastFive(chatID int, username string) (err error) {
 	return nil
 }
 
-func (p *Processor) savePage(chatID int, pageURL string, username string) (err error) {
+func (p *Processor) savePage(chatID int, pageURL string, username string, date string) (err error) {
 	defer func() { err = e.WrapIfErr("[savePage]: can't do command: save page", err) }()
 
 	name, _ := title(pageURL)
@@ -93,6 +103,7 @@ func (p *Processor) savePage(chatID int, pageURL string, username string) (err e
 		URL:      pageURL,
 		UserName: username,
 		Title:    name,
+		Date:     date,
 	}
 
 	isExists, err := p.storage.IsExists(context.Background(), page)
@@ -154,6 +165,7 @@ func (p *Processor) sendRandom(chatID int, username string) (err error) {
 	} else {
 		toSend = page.URL
 	}
+	toSend += fmt.Sprintf("\n\nБыла добавлена: %s", page.Date)
 
 	if err := p.tg.SendMessage(chatID, toSend, enableMarkdown); err != nil {
 		return err

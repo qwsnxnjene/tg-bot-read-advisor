@@ -21,6 +21,7 @@ type Page struct {
 	URL      string
 	UserName string
 	Title    string
+	Date     string
 }
 
 func (p Page) Hash() (string, error) {

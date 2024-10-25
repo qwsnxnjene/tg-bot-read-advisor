@@ -15,13 +15,12 @@ import (
 const (
 	tgBotHost         = "api.telegram.org"
 	storageSqlitePath = "data/sqlite/database.db"
-	batchSize         = 1
+	batchSize         = 100
 )
 
 /*
-TODO: 1. Добавить хранение заголовков статей в БД
-2. Добавить заголовки в ответы
-3. Добавить дату добавления статьи
+TODO:
+1. Добавить дату добавления статьи
 */
 
 func main() {

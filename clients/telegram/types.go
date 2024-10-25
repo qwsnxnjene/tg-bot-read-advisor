@@ -14,6 +14,7 @@ type IncomingMessage struct {
 	Text string `json:"text"`
 	From From   `json:"from"`
 	Chat Chat   `json:"chat"`
+	Date int    `json:"date"`
 }
 
 type From struct {
